@@ -18,4 +18,39 @@ The goal of this project is to automate the detection of code duplication in the
 - Use codesearch.debian.net to find code duplication in the archive
 - write report about attack of clone found 
 
+---
 
+## Approach
+
+For purposes of this prototype I shall be using a _classic_ unsafe pattern:
+
+```diff
+- strcpy(buffer, input);
++ strncpy(buffer, input, size);
+```
+
+Although nothing is _techincally_ wrong with this pattern usage, for this prototype it creates a sort of a _vulnerabilty_ because of its simplicity and misleading nature
+
+> `strcpy` can be unsafe, but it is not always a vulnerability
+> This pattern is derived from a patch replacing `strcpy` with `strncpy`
+
+This regex:
+    `strcpy\s*\(\s*[^,]+,\s*[^)]+\)`
+will match:
+
+1. safe uses
+2. test code
+3. dead code
+4. already patched code
+
+### Flow
+
+```mermaid
+graph TD
+    A[Patch] --> B[Extract: Removed & Added Lines]
+    B --> C[Generate Regex: Vuln & Fixed Patterns]
+    C --> D[Scan Files]
+    D --> E{Check Logic}
+    E -->|Vuln Present AND Fix Absent| F[Report Potential Vulnerable Clones]
+    E -->|Otherwise| G[Safe / No Match]
+```

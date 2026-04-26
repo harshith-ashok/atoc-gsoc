@@ -1,0 +1,161 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -510,7 +510,13 @@ option(CURL_DISABLE_TYPECHECK "Disable curl_easy_setopt()/curl_easy_getinfo() ty
+ mark_as_advanced(CURL_DISABLE_TYPECHECK)
+ option(CURL_DISABLE_VERBOSE_STRINGS "Disable verbose strings" OFF)
+ mark_as_advanced(CURL_DISABLE_VERBOSE_STRINGS)
++option(CURL_DEBUG_GLOBAL_MEM "Debug curl_global_init_mem" OFF)
++mark_as_advanced(CURL_DEBUG_GLOBAL_MEM)
+ 
++if(CURL_DEBUG_GLOBAL_MEM)
++  # Set it via the command-line to make it apply to the entire directory.
++  set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS "CURL_DEBUG_GLOBAL_MEM")
++endif()
+ if(CURL_DISABLE_TYPECHECK)
+   # Set it via the command-line to make it apply to examples also.
+   set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS "CURL_DISABLE_TYPECHECK")
+diff --git a/configure.ac b/configure.ac
+index 99ecbce5bc..9ae0cfd068 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1087,6 +1087,23 @@ AS_HELP_STRING([--disable-mqtt],[Disable MQTT support]),
+     AC_MSG_RESULT(no)
+ )
+ 
++AC_MSG_CHECKING([enable curl_global_init_mem debug build])
++AC_ARG_ENABLE(init-mem-debug,
++AS_HELP_STRING([--enable-init-mem-debug],[curl_global_init_mem debug])
++AS_HELP_STRING([--disable-init-mem-debug],[]),
++[ case "$enableval" in
++  yes)
++    AC_MSG_RESULT(yes)
++    AC_DEFINE(CURL_DEBUG_GLOBAL_MEM, 1, [curl_debug_global_mem debug build])
++    SUPPORT_FEATURES="$SUPPORT_FEATURES global-mem-debug"
++    ;;
++  *)
++    AC_MSG_RESULT(no)
++    ;;
++  esac ],
++    AC_MSG_RESULT(no)
++)
++
+ dnl **********************************************************************
+ dnl Check for built-in manual
+ dnl **********************************************************************
+diff --git a/src/tool_cfgable.c b/src/tool_cfgable.c
+index 0d151af02e..381ca874d9 100644
+--- a/src/tool_cfgable.c
++++ b/src/tool_cfgable.c
+@@ -21,6 +21,7 @@
+  * SPDX-License-Identifier: curl
+  *
+  ***************************************************************************/
++#include <stddef.h>
+ #include "tool_setup.h"
+ 
+ #include "tool_cfgable.h"
+@@ -206,6 +207,90 @@ void config_free(struct OperationConfig *config)
+   }
+ }
+ 
++#ifdef CURL_DEBUG_GLOBAL_MEM
++
++#ifdef CURL_MEMDEBUG
++#error "curl_global_init_mem() testing does not work with memdebug debugging"
++#endif
++
++/*
++ * This is the custom memory functions handed to curl when we run special test
++ * round to verify them.
++ *
++ * The main point is to make sure that what is returned is different than what
++ * the regular memory functions return so that mixup will trigger problems.
++ */
++
++struct extramem {
++  size_t extra;
++  union {
++    curl_off_t o;
++    double d;
++    void *p;
++  } mem[1];
++};
++
++static void *custom_calloc(size_t wanted_nmemb, size_t wanted_size)
++{
++  struct extramem *m;
++  size_t sz = wanted_size * wanted_nmemb;
++  sz += sizeof(struct extramem);
++  m = curlx_calloc(1, sz);
++  if(m)
++    return m->mem;
++  return NULL;
++}
++
++static void *custom_malloc(size_t wanted_size)
++{
++  struct extramem *m;
++  size_t sz = wanted_size + sizeof(struct extramem);
++  m = curlx_malloc(sz);
++  if(m)
++    return m->mem;
++  return NULL;
++}
++
++static char *custom_strdup(const char *ptr)
++{
++  struct extramem *m;
++  size_t size = strlen(ptr) + 1;
++  size_t sz = size + sizeof(struct extramem);
++  m = curlx_malloc(sz);
++  if(m) {
++    char *p = (char *)m->mem;
++    /* since strcpy is banned, we do memcpy */
++    memcpy(p, ptr, sz);
++    p[sz] = 0;
++    return (char *)m->mem;
++  }
++  return NULL;
++
++}
++
++static void *custom_realloc(void *ptr, size_t size)
++{
++  struct extramem *m = NULL;
++  size_t sz = size + sizeof(struct extramem);
++  if(ptr)
++    m = (void *)((char *)ptr - offsetof(struct extramem, mem));
++  m = curlx_realloc(ptr, sz);
++  if(m)
++    return m->mem;
++  return NULL;
++}
++
++static void custom_free(void *ptr)
++{
++  struct extramem *m = NULL;
++  if(ptr) {
++    m = (void *)((char *)ptr - offsetof(struct extramem, mem));
++    curlx_free(m);
++  }
++}
++
++#endif
++
+ /*
+  * This is the main global constructor for the app. Call this before
+  * _any_ libcurl usage. If this fails, *NO* libcurl functions may be
+@@ -230,7 +315,13 @@ CURLcode globalconf_init(void)
+   global->first = global->last = config_alloc();
+   if(global->first) {
+     /* Perform the libcurl initialization */
++#ifdef GLOBAL_MEM
++    result = curl_global_init_mem(CURL_GLOBAL_ALL, custom_malloc, custom_free,
++                                  custom_realloc, custom_strdup,
++                                  custom_calloc);
++#else
+     result = curl_global_init(CURL_GLOBAL_DEFAULT);
++#endif
+     if(!result) {
+       /* Get information about libcurl */
+       result = get_libcurl_info();

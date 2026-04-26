@@ -1,0 +1,60 @@
+{
+  "curl": [],
+  "coreutils": [
+    {
+      "file": "./coreutils/src/ls.c",
+      "line": 1354,
+      "match": "strcpy (abmon[i], abbr)"
+    },
+    {
+      "file": "./coreutils/src/numfmt.c",
+      "line": 806,
+      "match": "strcpy (pfmt, \".*Lf%s\")"
+    },
+    {
+      "file": "./coreutils/src/numfmt.c",
+      "line": 851,
+      "match": "strcpy (pfmt, \".*Lf%s%s%s%s\")"
+    },
+    {
+      "file": "./coreutils/src/who.c",
+      "line": 393,
+      "match": "strcpy (stpcpy (p, display)"
+    },
+    {
+      "file": "./coreutils/src/who.c",
+      "line": 405,
+      "match": "strcpy (stpcpy (p, host)"
+    },
+    {
+      "file": "./coreutils/src/csplit.c",
+      "line": 883,
+      "match": "strcpy (filename_space, prefix);\n  if (suffix)\n    sprintf (filename_space + strlen (prefix)"
+    },
+    {
+      "file": "./coreutils/src/shred.c",
+      "line": 601,
+      "match": "strcpy (previous_offset_buf, human_offset)"
+    },
+    {
+      "file": "./coreutils/src/seq.c",
+      "line": 288,
+      "match": "strcpy (ldfmt + length_modifier_offset + 1,\n                fmt + length_modifier_offset + has_L)"
+    },
+    {
+      "file": "./coreutils/src/stat.c",
+      "line": 686,
+      "match": "strcpy (dst, suffix)"
+    },
+    {
+      "file": "./coreutils/src/stat.c",
+      "line": 851,
+      "match": "strcpy (pformat + prefix_len, \"s\")"
+    },
+    {
+      "file": "./coreutils/src/ln.c",
+      "line": 359,
+      "match": "strcpy (backup + destdirlen, backup_base)"
+    }
+  ]
+}

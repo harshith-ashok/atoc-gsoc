@@ -1,0 +1,5 @@
+--- a/example.c
++++ b/example.c
+@@
+- strcpy(dest, src);
++ memcpy(dest, src, strlen(src) + 1);

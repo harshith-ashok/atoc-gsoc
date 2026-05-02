@@ -4,167 +4,332 @@
 
 ---
 
-## 1. Approach
+## 1. What this prototype is
 
-For purposes of this prototype I shall be using a _classic_ unsafe pattern:
+This repository is an early proof of concept for the idea behind:
 
-```diff
-- strcpy(buffer, input);
-+ strncpy(buffer, input, size);
-```
+**Attack Of The Clones: Fight Back Using Code Duplication Detection from Security Patches**
 
-Although nothing is _techincally_ wrong with this pattern usage, for this prototype it creates a sort of a _vulnerabilty_ because of its simplicity and misleading nature
+The goal is simple:
 
-> `strcpy` can be unsafe, but it is not always a vulnerability
-> This pattern is derived from a patch replacing `strcpy` with `strncpy`
+1. take a security patch
+2. extract the vulnerable side of the change
+3. turn that into a loose regex signature
+4. scan other packages for code that still looks like the vulnerable version
+5. report possible code clones that may need review
 
-This regex:
-`strcpy\s*\(\s*[^,]+,\s*[^)]+\)`
-will match:
+This is **not** a vulnerability verifier.
+It is a **clone finder** and a **triage helper**.
 
-1. safe uses
-2. test code
-3. dead code
-4. already patched code
+So if it finds a match, that means:
 
-### 3.1 Flow
+> "this looks similar enough to the vulnerable pattern that a human should inspect it"
 
-```mermaid
-graph TD
-    A[Patch] --> B[Extract: Removed & Added Lines]
-    B --> C[Generate Regex: Vuln & Fixed Patterns]
-    C --> D[Scan Files]
-    D --> E{Check Logic}
-    E -->|Vuln Present AND Fix Absent| F[Report Potential Vulnerable Clones]
-    E -->|Otherwise| G[Safe / No Match]
-```
+not:
+
+> "this is definitely vulnerable"
 
 ---
 
-## 2. Implementation
+## 2. Why this exists
+
+One of the hard parts of security maintenance is that vulnerable code does not always live in just one place.
+Sometimes the same logic gets copied, adapted, or embedded across multiple packages.
+
+That creates a distribution-wide problem:
+
+- one upstream project fixes a bug
+- another package still contains copied vulnerable logic
+- the fix does not automatically propagate
+- security teams still have to go and find the other copies manually
+
+This prototype explores whether a patch can be used as the starting point for that search.
 
 ---
 
-## 3. Demo
+## 3. Current approach
 
-To run the application ensure the diff files are present in the `samples/` directory and then run
-
-## 3.1 Step 1 - Patch Parsing - `patch_parser.py`
-
-Input:
+For the local demo, the prototype uses a deliberately simple pattern:
 
 ```diff
 - strcpy(dest, src);
 + memcpy(dest, src, strlen(src) + 1);
 ```
 
-What happens:
+or in the built-in demo:
 
-- this extracts code lines from the patch
-- and filters out comments, junk, metadata
-
-Output:
-
-```python
-removed = ["strcpy(dest, src);"]
-added = ["memcpy(dest, src, strlen(src) + 1);"]
+```diff
+- strcpy(dest, src);
+- buf[len] = 0;
++ strncpy(dest, src, maxlen - 1);
++ dest[maxlen - 1] = '\0';
 ```
 
-## 3.2 Step 2 - Signature Generation - `signature.py`
+The current pipeline is:
 
-Takes:
-
-```python
-"strcpy(dest, src);"
+```mermaid
+graph TD
+    A["Patch / Diff"] --> B["Parse Hunks"]
+    B --> C["Extract Removed And Added Code"]
+    C --> D["Generate Loose Regex Signatures"]
+    D --> E["Scan Local Package Trees"]
+    E --> F["Check Nearby Fix Context"]
+    F --> G["Write Potential Clone Report"]
 ```
 
-Converts into regex:
+The idea is:
 
-```regex
-strcpy\s*\(\s*[^,]+,\s*[^)]+\)
+- removed lines represent the vulnerable shape
+- added lines represent the fixed shape
+- if the vulnerable shape is present and the fix is not nearby, flag it as a possible clone
+
+---
+
+## 4. What the code does today
+
+### `patch_parser.py`
+
+This reads a unified diff and extracts code-looking lines from each hunk.
+
+It keeps:
+
+- removed lines
+- added lines
+- basic per-hunk grouping
+
+It tries to ignore:
+
+- diff metadata
+- comment-only lines
+- empty syntax noise
+
+### `signature.py`
+
+This converts removed patch lines into loose regex signatures.
+
+It currently tries to be flexible by:
+
+- preserving strong anchors like function names
+- abstracting identifiers
+- abstracting numeric values
+- allowing whitespace variation
+- building both single-line and multi-line signatures
+
+### `scanner.py`
+
+This walks local package trees and scans source files for those signatures.
+
+Right now it:
+
+- scans `.c`, `.h`, `.cpp`, and `.py`
+- skips obvious non-target directories like `tests`, `examples`, `docs`, `build`, and `vendor`
+- checks whether fix-like context appears near a vulnerable match
+- records file path, line number, matched line, confidence, and whether the fix seems present nearby
+
+### `tracker.py`
+
+This is a small local helper for `--cve` mode.
+
+It loads a JSON tracker file and returns patch entries for a requested CVE.
+
+This is only a local stub for now.
+It is not yet a full Debian security tracker integration.
+
+### `main.py`
+
+This is the CLI entry point.
+
+It supports:
+
+- scanning a local patch file
+- running the built-in demo
+- running a local CVE lookup against a tracker JSON file
+
+---
+
+## 5. What this prototype is good at right now
+
+- quickly testing the general idea on a few cloned source trees
+- showing how removed patch lines can become search patterns
+- producing a small machine-readable report
+- surfacing obvious copied unsafe patterns like `strcpy(...)`
+
+---
+
+## 6. What this prototype is not good at yet
+
+This is still an early prototype, so false positives are expected.
+
+The current weak spots are:
+
+- regexes can still become too broad
+- lexical similarity is not semantic equivalence
+- safe uses can still match
+- add-only patches do not produce useful vulnerable signatures
+- fix detection is only a nearby-text heuristic
+- there is no ranking model beyond simple confidence labels
+- there is no automatic Debian tracker ingestion yet
+
+So the output should be read as:
+
+> "possible clone candidates for review"
+
+not:
+
+> "confirmed affected packages"
+
+---
+
+## 7. Repository layout
+
+```text
+.
+├── main.py
+├── patch_parser.py
+├── signature.py
+├── scanner.py
+├── tracker.py
+├── samples/
+│   ├── patch.diff
+│   └── curl.diff
+├── curl/
+├── coreutils/
+├── openssh/
+└── openssl/
 ```
 
-this basically makes the pattern more flexible and can match variations like:
+The four package directories are local cloned codebases used for experimentation.
 
-- `strcpy(a, b)`
-- `strcpy(buf, input)`
+---
 
-## 3.3 Step 3 - Repository Scanning - `scanner.py`
+## 8. How to run it
 
-For each file in:
+### 8.1 Run the simple local patch scan
 
-1. `curl`
-2. `coreutils`
-
-The Program:
-
-1. Opens the file
-2. Applies regex
-3. Finds matches
-4. Records:
-   - file path
-   - line number
-   - matched code
-
-## Output
-
-- execute `python3 ./main.py`
-
-```
-=== Parsing Patch ===
-
-Removed (pattern source):
- - strcpy(dest, src);
-
-Added (context/fix):
- + memcpy(dest, src, strlen(src) + 1);
-
-Generated Regex Patterns:
-  strcpy\s*\(\s*[^,]+\s*,\s*[^,]+\s*\)
-
-=== Scanning curl ===
-Found 0 matches
-
-=== Scanning coreutils ===
-Found 11 matches
-./coreutils/src/ls.c:1354 -> strcpy (abmon[i], abbr)
-./coreutils/src/numfmt.c:806 -> strcpy (pfmt, ".*Lf%s")
-./coreutils/src/numfmt.c:851 -> strcpy (pfmt, ".*Lf%s%s%s%s")
-./coreutils/src/who.c:393 -> strcpy (stpcpy (p, display)
-./coreutils/src/who.c:405 -> strcpy (stpcpy (p, host)
-
-Saving report.json...
-
-Done.
+```bash
+python3 main.py --patch samples/patch.diff
 ```
 
-- contents of `report.json`
+This uses the sample `strcpy -> memcpy` style patch and scans the default package directories.
+
+### 8.2 Run the built-in demo
+
+```bash
+python3 main.py --demo
+```
+
+This prints the generated signatures and example codesearch URLs.
+
+### 8.3 Scan selected targets only
+
+```bash
+python3 main.py --patch samples/patch.diff \
+  --target curl=./curl \
+  --target openssl=./openssl
+```
+
+You can pass either:
+
+- `name=path`
+- just `path`
+
+### 8.4 Run local CVE mode
+
+```bash
+python3 main.py --cve CVE-TEST-0001 --tracker-file /path/to/tracker.json
+```
+
+Example tracker format:
 
 ```json
-{
-  "curl": [],
-  "coreutils": [
-    {
-      "file": "./coreutils/src/ls.c",
-      "line": 1354,
-      "match": "strcpy (abmon[i], abbr)"
-    },
-    {
-      "file": "./coreutils/src/numfmt.c",
-      "line": 806,
-      "match": "strcpy (pfmt, \".*Lf%s\")"
-    },
-    ...
-    {
-      "file": "./coreutils/src/stat.c",
-      "line": 851,
-      "match": "strcpy (pformat + prefix_len, \"s\")"
-    },
-    {
-      "file": "./coreutils/src/ln.c",
-      "line": 359,
-      "match": "strcpy (backup + destdirlen, backup_base)"
-    }
-  ]
-}
+[
+  {
+    "cve": "CVE-TEST-0001",
+    "package": "demo-package",
+    "patch": "samples/patch.diff"
+  }
+]
 ```
+
+You can also provide inline patch content instead of a file path:
+
+```json
+[
+  {
+    "cve": "CVE-TEST-0001",
+    "package": "demo-package",
+    "content": "--- a/a.c\n+++ b/a.c\n@@\n- strcpy(dest, src);\n+ memcpy(dest, src, strlen(src) + 1);\n"
+  }
+]
+```
+
+---
+
+## 9. Example output
+
+For:
+
+```bash
+python3 main.py --patch samples/patch.diff
+```
+
+you may see output like:
+
+```text
+Removed: ['strcpy(dest, src);']
+Added:   ['memcpy(dest, src, strlen(src) + 1);']
+
+Generated 1 signatures
+
+=== openssl ===
+  matches: 9, potential clones: 9
+  ./openssl/crypto/s390xcap.c:499 [medium] strcpy(buff, env);
+  ./openssl/crypto/LPdir_win.c:158 [medium] strcpy(buf, directory);
+  ...
+```
+
+This means:
+
+- one vulnerable-side signature was generated
+- the scanner found similar `strcpy(...)` usage in `openssl`
+- those are candidates for inspection, not confirmed vulnerabilities
+
+---
+
+## 10. Notes on the sample diffs
+
+### `samples/patch.diff`
+
+This is the useful demo patch for local testing.
+It contains a removed vulnerable-looking line and an added replacement line.
+
+### `samples/curl.diff`
+
+This file is currently not a good vulnerability-clone example.
+It is mostly an add-only patch, so there is no meaningful removed vulnerable side to mine.
+
+As a result, the tool currently produces:
+
+- removed lines: empty
+- generated signatures: `0`
+
+That is expected behavior for the current prototype.
+
+---
+
+## 11. Report output
+
+Results are written to `report.json`.
+
+Each entry may contain fields like:
+
+- `file`
+- `line`
+- `match`
+- `confidence`
+- `fix_present`
+- `package`
+
+That output is meant to be easy to inspect manually or feed into a later reporting step.
+
+---

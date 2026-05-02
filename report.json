@@ -1,60 +1,70 @@
 {
   "curl": [],
-  "coreutils": [
+  "coreutils": [],
+  "openssh": [],
+  "openssl": [
     {
-      "file": "./coreutils/src/ls.c",
-      "line": 1354,
-      "match": "strcpy (abmon[i], abbr)"
+      "file": "./openssl/crypto/s390xcap.c",
+      "line": 499,
+      "match": "strcpy(buff, env);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/numfmt.c",
-      "line": 806,
-      "match": "strcpy (pfmt, \".*Lf%s\")"
+      "file": "./openssl/crypto/LPdir_win.c",
+      "line": 158,
+      "match": "strcpy(buf, directory);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/numfmt.c",
-      "line": 851,
-      "match": "strcpy (pfmt, \".*Lf%s%s%s%s\")"
+      "file": "./openssl/crypto/dso/dso_vms.c",
+      "line": 310,
+      "match": "strcpy(symname_32p, symname);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/who.c",
-      "line": 393,
-      "match": "strcpy (stpcpy (p, display)"
+      "file": "./openssl/crypto/dso/dso_vms.c",
+      "line": 412,
+      "match": "strcpy(filespec1_32p, filespec1);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/who.c",
-      "line": 405,
-      "match": "strcpy (stpcpy (p, host)"
+      "file": "./openssl/crypto/dso/dso_vms.c",
+      "line": 413,
+      "match": "strcpy(filespec2_32p, filespec2);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/csplit.c",
-      "line": 883,
-      "match": "strcpy (filename_space, prefix);\n  if (suffix)\n    sprintf (filename_space + strlen (prefix)"
+      "file": "./openssl/crypto/dso/dso_dlfcn.c",
+      "line": 237,
+      "match": "strcpy(merged, filespec2);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/shred.c",
-      "line": 601,
-      "match": "strcpy (previous_offset_buf, human_offset)"
+      "file": "./openssl/crypto/dso/dso_dl.c",
+      "line": 197,
+      "match": "strcpy(merged, filespec2);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/seq.c",
-      "line": 288,
-      "match": "strcpy (ldfmt + length_modifier_offset + 1,\n                fmt + length_modifier_offset + has_L)"
+      "file": "./openssl/crypto/rand/randfile.c",
+      "line": 323,
+      "match": "strcpy(buf, s);",
+      "confidence": "medium",
+      "fix_present": false
     },
     {
-      "file": "./coreutils/src/stat.c",
-      "line": 686,
-      "match": "strcpy (dst, suffix)"
-    },
-    {
-      "file": "./coreutils/src/stat.c",
-      "line": 851,
-      "match": "strcpy (pformat + prefix_len, \"s\")"
-    },
-    {
-      "file": "./coreutils/src/ln.c",
-      "line": 359,
-      "match": "strcpy (backup + destdirlen, backup_base)"
+      "file": "./openssl/crypto/rand/randfile.c",
+      "line": 327,
+      "match": "strcpy(buf, s);",
+      "confidence": "medium",
+      "fix_present": false
     }
   ]
 }

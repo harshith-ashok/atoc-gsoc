@@ -1,54 +1,51 @@
 import re
 
+SKIP = ("//", "/*", "*", "*/", "#", "---", "+++", "@@")
+CODE = re.compile(r'\(|\[|=|->|return\s|;$')
 
-def is_valid_code(line: str):
+
+def is_code(line):
     line = line.strip()
-
-    if not line:
+    if not line or len(line) < 4:
         return False
-
-    # Ignore comments
-    if line.startswith("//") or line.startswith("/*") or line.startswith("*"):
+    if any(line.startswith(p) for p in SKIP):
         return False
-
-    # Ignore preprocessor
-    if line.startswith("#"):
+    if re.fullmatch(r'[\{\}\s;]+', line):
         return False
-
-    # Basic heuristic: looks like function call
-    if "(" in line and ")" in line:
-        return True
-
-    return False
+    return bool(CODE.search(line))
 
 
-def extract_patch_data(patch_text: str):
-    removed = []
-    added = []
+def parse(text):
+    removed, added, hunks = [], [], []
+    hunk = {"removed": [], "added": [], "context": []}
+    in_hunk = False
 
-    for line in patch_text.splitlines():
-        if line.startswith('-') and not line.startswith('---'):
-            cleaned = line[1:].strip()
-            if is_valid_code(cleaned):
-                removed.append(cleaned)
+    for line in text.splitlines():
+        if line.startswith("@@"):
+            if in_hunk:
+                hunks.append(hunk)
+            hunk = {"removed": [], "added": [], "context": []}
+            in_hunk = True
+        elif in_hunk:
+            if line.startswith("-") and not line.startswith("---"):
+                c = line[1:].strip()
+                if is_code(c):
+                    hunk["removed"].append(c)
+                    removed.append(c)
+            elif line.startswith("+") and not line.startswith("+++"):
+                c = line[1:].strip()
+                if is_code(c):
+                    hunk["added"].append(c)
+                    added.append(c)
+            elif line.startswith(" "):
+                hunk["context"].append(line[1:].strip())
 
-        elif line.startswith('+') and not line.startswith('+++'):
-            cleaned = line[1:].strip()
-            if is_valid_code(cleaned):
-                added.append(cleaned)
+    if in_hunk:
+        hunks.append(hunk)
 
-    # Fallback: if no removed lines, use added lines
-    if not removed and added:
-        removed = added[:]
-
-    return {
-        "removed": removed,
-        "added": added
-    }
+    return {"removed": removed, "added": added, "hunks": hunks}
 
 
-def parse_patch_file(path: str):
-    with open(path, 'r', errors='ignore') as f:
-        content = f.read()
-
-    return extract_patch_data(content)
+def parse_file(path):
+    with open(path, errors="ignore") as f:
+        return parse(f.read())

@@ -1,7 +1,5 @@
 {
   "curl": [],
-  "coreutils": [],
-  "openssh": [],
   "openssl": [
     {
       "file": "./openssl/crypto/s390xcap.c",

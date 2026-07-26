@@ -1,0 +1,12 @@
+[
+  {
+    "cve": "CVE-TEST-0001",
+    "package": "demo-package",
+    "patch": "samples/patch.diff"
+  },
+  {
+    "cve": "CVE-TEST-0002",
+    "package": "another-demo-package",
+    "content": "--- a/src/copy.c\n+++ b/src/copy.c\n@@ -10,6 +10,8 @@\n void safe_copy(char *dest, const char *src, size_t maxlen) {\n-    strcpy(dest, src);\n-    buf[len] = 0;\n+    strncpy(dest, src, maxlen - 1);\n+    dest[maxlen - 1] = '\\0';\n }\n"
+  }
+]
